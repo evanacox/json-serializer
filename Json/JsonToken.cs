@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Serialization
+namespace Json 
 {
+    /// <summary>
+    /// Represents the type of a token
+    /// </summary>
     internal enum TokenType
     {
         OPEN_CURLY,

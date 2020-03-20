@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace Serialization
+namespace Json 
 {
     /// <summary>
     /// Handles de-serializing JSON data
@@ -25,6 +26,7 @@ namespace Serialization
         /// <param name="data">The JSON string</param>
         public Deserializer(string data)
         {
+            // strips whitespace, except from inside double quotes
             _jsonString = RemoveWhitespace(data);
         }
 
@@ -34,7 +36,9 @@ namespace Serialization
         /// <returns>A dictionary containing the JSON data</returns>
         public dynamic Deserialize()
         {
-            // TODO: handle JSON strings that don't start with objects
+            // doing it this way handles valid JSON that doesn't start with {}
+            // technically, just an element is perfectly valid (though I don't
+            // know why you would ever use that)
             return Element();
         }
 
@@ -52,6 +56,7 @@ namespace Serialization
                 TokenType.OPEN_BRACKET => Array(),
                 TokenType.DOUBLE_QUOTE => String(),
                 TokenType.NUMBER => Number(),
+                // if it's past this point, its a character that *may* be a bool/null, or could be invalid
                 _ => peeked.Character switch
                 {
                     't' => Boolean(),
@@ -62,25 +67,37 @@ namespace Serialization
             };
         }
 
-        private IReadOnlyDictionary<string, dynamic> Object()
+        /// <summary>
+        /// Transforms a JSON object ('{ ... }') into a Dictionary
+        /// </summary>
+        /// <returns>A Dictionary containing the JSON data</returns>
+        private IDictionary<string, dynamic> Object()
         {
             var dict = new Dictionary<string, dynamic>();
+            
+            // whether or not there's a comma, and thus, whether new members
+            // need to keep getting scanned
+            var isComma = true;
 
-            // consume opening curly
             Consume('{');
 
-            while (!Match('}'))
+            while (isComma)
             {
+                isComma = false;
+
                 // consumes a member's key inside the object
                 var key = String();
 
                 Consume(':');
 
+                // consume whatever the value is, set it inside the dict
                 dict[key] = Element();
 
+                // consume comma if its present, and set isComma to true again
                 if (Match(','))
                 {
                     Consume(',');
+                    isComma = true;
                 }
             }
 
@@ -89,20 +106,56 @@ namespace Serialization
             return dict;
         }
 
-        private IReadOnlyList<dynamic> Array()
+        /// <summary>
+        /// Transforms a JSON array ('[ ... ]') into a List
+        /// </summary>
+        /// <returns>A List containing the JSON data</returns>
+        private IList<dynamic> Array()
         {
-            return null;
+            var list = new List<dynamic>();
+
+            // I'm doing basically the same thing I did 
+            // with how I parsed {}s here. if there isn't a comma
+            // after an element, I'm assuming its the last one
+            // (since the JSON spec requires that)
+            var isComma = true;
+
+            Consume('[');
+
+            // if there's a comma, the loop needs to continue grabbing elements
+            while (isComma)
+            {
+                isComma = false;
+                
+                list.Add(Element());
+
+                // set isComma to true if there's another comma
+                if (Match(','))
+                {
+                    Consume(',');
+                    isComma = true;
+                }
+            }
+
+            Consume(']');
+
+            return list;
         }
 
+        /// <summary>
+        /// Transforms a JSON string into a .NET string
+        /// </summary>
+        /// <returns>A .NET string</returns>
         private string String()
         {
             // Consume the first quote
             Consume('"');
 
-            var str = "";
+            var readString = "";
 
             while (!Match('"'))
             {
+                // if its the last character and it's in here, there wasn't a closing quote
                 if (_currentChar + 1 == _jsonString.Length)
                 {
                     throw new FormatException("Unexpected EOF while reading String!");
@@ -110,17 +163,19 @@ namespace Serialization
 
                 var consumed = Consume();
 
+                // if the char isn't a backslash, just add and continue
                 if (consumed.Character != '\\')
                 {
-                    str += consumed.Character;
+                    readString += consumed.Character;
 
                     continue;
                 }
 
-                // character might be escaping something
+                // if it IS a backslash, it might be escaping the next char
                 var next = Consume();
 
-                str += next.Character switch
+                // if it IS a valid escape sequence, the character is added manually to the string
+                readString += next.Character switch
                 {
                     'b' => '\b',
                     'f' => '\f',
@@ -129,8 +184,7 @@ namespace Serialization
                     't' => '\t',
                     '"' => '"',
                     '\\' => '\\',
-                    // I know its only necessary with one, but its much more clear whats going on
-                    // when both are .ToString()-ed
+                    // Else, its just a slash and a character. Concat the two, and return
                     _ => consumed.Character.ToString() + next.Character.ToString()
                 }; 
             }
@@ -138,41 +192,64 @@ namespace Serialization
             // consume the second quote
             Consume('"');
 
-            return str;
+            return readString;
         }
 
-        private float Number()
+        /// <summary>
+        /// Transforms a JSON number into a .NET number. If there's a decimal 
+        /// point, the method returns a `double`. If not, it returns a `long`
+        /// </summary>
+        /// <returns></returns>
+        private dynamic Number()
         {
             var numberStr = "";
 
             // check for EOF has to come first, or the Match() will error out
             // only actually matters when parsing a raw 'x' that isnt inside an object
-            while (_currentChar != _jsonString.Length && !Match(',') && !Match('}'))
+            while (!MatchesEnd())
             {
                 var consumed = Consume();
 
                 if (consumed.Type != TokenType.NUMBER && consumed.Type != TokenType.PERIOD)
                 {
-                    throw new FormatException($"Unexpected character '{consumed.Character}', expected a digit or '.'");
+                    // why does `'}'` need to be interpolated? its weird
+                    throw new FormatException($"Unexpected character '{consumed.Character}', expected a digit, period, comma, or {'}'} ");
                 }
 
                 numberStr += consumed.Character;
             }
 
-            return float.Parse(numberStr);
+            // don't consume the comma/curly, that's the job of the parent
+
+            if (numberStr.Contains('.'))
+            {
+                if (numberStr.Count(c => c == '.') > 1)
+                {
+                    throw new FormatException($"You can't have more than one period inside a number literal! Got: '{numberStr}'");
+                }
+
+                return double.Parse(numberStr);
+            }
+
+            return long.Parse(numberStr);
         }
 
+        /// <summary>
+        /// Consumes a boolean
+        /// </summary>
+        /// <returns></returns>
         private bool Boolean()
         {
             var boolStr = "";
 
-            while (_currentChar != _jsonString.Length && !Match(',') && !Match('}'))
+            while (!MatchesEnd())
             {
                 var consumed = Consume();
 
                 if (consumed.Type != TokenType.UNKNOWN)
                 {
-                    throw new FormatException($"Unexpected character '{consumed.Character}', expected a character that was part of a bool");
+                    // why does `'}'` need to be interpolated? its weird
+                    throw new FormatException($"Unexpected character '{consumed.Character}', expected a character that was part of a bool, comma, or {'}'}");
                 }
 
                 boolStr += consumed.Character;
@@ -181,10 +258,13 @@ namespace Serialization
             return (boolStr == "true");
         }
 
-        private object Null()
-        {
-            return null;
-        }
+        /// <summary>
+        /// Returns `null` for JSON. This method pnly exists on the 
+        /// off chance I ever change what JSON `null` translates to in .NET
+        /// </summary>
+        /// <returns>Returns `null`</returns>
+        private object Null() => null;
+        
 
         /// <summary>
         /// Consumes a character, and adds to the current index.
@@ -242,12 +322,32 @@ namespace Serialization
         /// <param name="token">The TokenType to match against</param>
         /// <returns>Whether the next token matches that type</returns>
         private bool Match(TokenType token) => Peek().Type == token;
-        
+
         /// <summary>
-        /// Strips the input string of all whitespace
+        /// Whether or not the next character is the end of something, e.g end of the field, 
+        /// e.g end of an object, field, array, or EOF
+        /// </summary>
+        /// <returns>Returns whether the next char is the end of an object, field, array, or EOF</returns>
+        private bool MatchesEnd() => _currentChar == _jsonString.Length || Match(',') || Match('}') || Match(']');
+
+        /// <summary>
+        /// Strips the input string of all whitespace, EXCEPT when it's between double quotes
         /// </summary>
         /// <param name="toRemoveFrom">The input string</param>
-        /// <returns>The string, but without any whitespace</returns>
-        private string RemoveWhitespace(string toRemoveFrom) => Regex.Replace(toRemoveFrom, @"\s+", System.String.Empty);
+        /// <returns>The fixed string</returns>
+        private string RemoveWhitespace(string toRemoveFrom)
+        {
+            // matches everything that isn't whitespace. also matches 
+            // *everything* inside "s, and the "s themselves
+            var matches = Regex.Matches(toRemoveFrom, "[^\\s\"]+|\"[^\"]*\"");
+            var fixedString = "";
+
+            foreach (Match match in matches)
+            {
+                fixedString += match.Value;
+            }
+
+            return fixedString;
+        }
     }
 }

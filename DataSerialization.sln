@@ -8,7 +8,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataSerialization", "DataSe
 		{8D3AD82B-0E7E-4F1C-8A99-62DD9826D453} = {8D3AD82B-0E7E-4F1C-8A99-62DD9826D453}
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serialization", "Json\Serialization.csproj", "{8D3AD82B-0E7E-4F1C-8A99-62DD9826D453}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Json", "Json\Json.csproj", "{8D3AD82B-0E7E-4F1C-8A99-62DD9826D453}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
