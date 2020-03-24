@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Json
 {
-    interface ISerializable 
+    public interface ISerializable 
     {
         public string JsonSerialize();
     }
