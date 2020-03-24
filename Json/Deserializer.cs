@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 namespace Json 
 {
     /// <summary>
-    /// Handles de-serializing JSON data
+    /// Handles parsing and de-serializing JSON data
     /// </summary>
     internal class Deserializer
     {
@@ -221,6 +221,7 @@ namespace Json
 
             // don't consume the comma/curly, that's the job of the parent
 
+            // if the number is a decimal, return a double
             if (numberStr.Contains('.'))
             {
                 if (numberStr.Count(c => c == '.') > 1)
@@ -231,6 +232,7 @@ namespace Json
                 return double.Parse(numberStr);
             }
 
+            // if it's not, return a long
             return long.Parse(numberStr);
         }
 
