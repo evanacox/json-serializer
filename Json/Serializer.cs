@@ -37,6 +37,9 @@ namespace Json
             else if (obj is string)
                 return SerializeString(obj);
 
+            else if (obj is ISerializable)
+                return SerializeSerializable(obj);
+
             else
                 return obj.ToString();
         }

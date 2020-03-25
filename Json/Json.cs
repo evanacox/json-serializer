@@ -20,7 +20,15 @@ namespace Json
         }
 
         /// <summary>
-        /// Turns a .NET object into a JSON string
+        /// Turns a .NET object into a JSON string.
+        /// 
+        /// Valid .NET objects:
+        ///   - IDictionary<string, dynamic>
+        ///   - IList<dynamic>
+        ///   - System.String
+        ///   - Any standard integral types, and all three floats
+        ///   - BigInteger
+        ///   - Anything ISerializable (ISerializable.JsonSerialize() must return valid JSON)
         /// </summary>
         /// <param name="obj">A .NET object</param>
         /// <returns>A JSON string</returns>
