@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace Json
+﻿namespace Json
 {
     /// <summary>
     /// Main JSON class

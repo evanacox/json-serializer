@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Json.Tests
+﻿namespace Json.Tests
 {
     /// <summary>
     /// This type exists purely for use in tests

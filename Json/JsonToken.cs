@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Json 
+﻿namespace Json 
 {
     /// <summary>
     /// Represents the type of a token
